@@ -37,15 +37,12 @@ def hit(room, d, s, e, skip=""):
 def user_hit(uid, d, s, e):
     a, b = dtime(d, s), dtime(d, e)
     for x in db()["bookings"]:
-        # 只要自己在這個會議的與會名單中，且時間有重疊（不限會議室，排除自己同場會議改時間的情況）
         if uid in x["people"] and x["date"] == d and a < dtime(d, x["end"]) and b > dtime(d, x["start"]):
-            return x["id"] # 回傳衝突的會議代碼
+            return x["id"]
     return ""
 def time_grid(room, d):
-    times = ts() # 包含 09:00 ~ 21:00
+    times = ts() 
     bookings = [x for x in db()["bookings"] if x["room"] == room and x["date"] == d]
-    
-    # 檢查某個 30 分鐘時間點是否因為「既有會議」或「前後 30 分鐘緩衝」而不可預訂
     def is_slot_busy(s):
         t_target = dtime(d, s)
         for b in bookings:
@@ -54,13 +51,10 @@ def time_grid(room, d):
             if b_start <= t_target < b_end: return True
         if t_target <= dt.datetime.now() + dt.timedelta(hours=1): return True
         return False
-
-    # 【新需求 1】將開始與結束時間下拉選單「並排」呈現在同一行
     c_s, c_e = st.columns(2)
     with c_s:
         start_options = times[:-1]
         start = st.selectbox("開始時間", start_options, key=f"sel_s_{room}_{d}")
-    
     with c_e:
         if is_slot_busy(start):
             end_options = ["該時段無法預約"]; end = "該時段無法預約"
@@ -71,16 +65,12 @@ def time_grid(room, d):
             for e_candidate in times[start_idx + 1:]:
                 if is_slot_busy(times[times.index(e_candidate)-1]): break
                 valid_ends.append(e_candidate)
-            
             if not valid_ends:
                 end_options = ["該時段無法預約"]; end = "該時段無法預約"
                 st.selectbox("結束時間", end_options, disabled=True, key=f"sel_e_{room}_{d}")
             else:
                 end = st.selectbox("結束時間", valid_ends, key=f"sel_e_{room}_{d}")
-
     st.markdown("<p style='font-size:14px; font-weight:bold; margin-top:15px; margin-bottom:5px;'>會議室當日預訂狀態時間軸</p>", unsafe_allow_html=True)
-    
-    # 【新需求 3】CSS 調整：移除 border-right，讓中間完全沒有格子邊線，形成一體化流線型
     st.markdown("""
         <style>
         div[data-testid='stHorizontalBlock'] > div { min-width: 0px !important; padding: 0px !important; }
@@ -89,28 +79,17 @@ def time_grid(room, d):
         .timeline-label-item { position: absolute; transform: translateX(-50%); font-size: 11px; font-weight: 600; color: #475569; white-space: nowrap; }
         </style>
     """, unsafe_allow_html=True)
-    
-    # 【新需求 2】動態計算需要顯示的時間刻度集合
-    # 預設包含最早 09:00 與最晚 21:00
     active_labels = {"09:00", "21:00"}
-    
-    # 點選後，加入「已選擇」的開始和結束時間
     if end != "該時段無法預約" and start and end:
         active_labels.add(start)
         active_labels.add(end)
-        
-    # 加入「不可預訂」會議的真實開始與結束時間（包含前後30分鐘緩衝）
     for b in bookings:
         b_start_str = ((dtime(d, b["start"]) - dt.timedelta(minutes=30)).time()).strftime("%H:%M")
         b_end_str = ((dtime(d, b["end"]) + dt.timedelta(minutes=30)).time()).strftime("%H:%M")
-        # 確保在我們營業時間 09:00~21:00 內的標籤才加入
         if "09:00" <= b_start_str <= "21:00": active_labels.add(b_start_str)
         if "09:00" <= b_end_str <= "21:00": active_labels.add(b_end_str)
-
-    # 渲染一體化（無邊線）時間軸
     bar_html = "<div class='timeline-container'>"
     total_slots = len(times) - 1
-    
     for i, s in enumerate(times[:-1]):
         if end != "該時段無法預約" and start and end and (dtime(d, start) <= dtime(d, s) < dtime(d, end)):
             bg_style = "background-color: #4ade80;" # 🟩 已選擇
@@ -118,17 +97,12 @@ def time_grid(room, d):
             bg_style = "background-color: #e2e8f0; background-image: linear-gradient(45deg, #cbd5e1 25%, transparent 25%, transparent 50%, #cbd5e1 50%, #cbd5e1 75%, transparent 75%, transparent); background-size: 8px 8px;" # ▒ 不可預訂
         else:
             bg_style = "background-color: #ffffff;" # ⬜ 可預訂
-            
-        # 注意：這裡去除了所有的 border-right，中間完全無縫接軌
         bar_html += f"<div style='flex: 1; {bg_style}' title='{s}'></div>"
     bar_html += "</div>"
     st.markdown(bar_html, unsafe_allow_html=True)
-    
-    # 渲染動態絕對定位的刻度標籤
     labels_html = "<div class='timeline-labels'>"
     for s in sorted(list(active_labels)):
         try:
-            # 計算該時間點在 09:00~21:00 總區間中的百分比位置，精準對齊圖表
             idx = times.index(s)
             pos_percent = (idx / total_slots) * 100
             labels_html += f"<div class='timeline-label-item' style='left: {pos_percent}%;'>{s}</div>"
@@ -136,8 +110,6 @@ def time_grid(room, d):
             pass
     labels_html += "</div>"
     st.markdown(labels_html, unsafe_allow_html=True)
-    
-    # 底部狀態圖例
     st.markdown("""
         <div style='display: flex; gap: 20px; font-size: 12px; margin-top: 5px; justify-content: center;'>
             <div style='display: flex; align-items: center; gap: 6px;'><div style='width: 14px; height: 14px; background: #4ade80; border-radius: 3px;'></div>已選擇</div>
@@ -145,7 +117,6 @@ def time_grid(room, d):
             <div style='display: flex; align-items: center; gap: 6px;'><div style='width: 14px; height: 14px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 3px;'></div>可預訂</div>
         </div><br>
     """, unsafe_allow_html=True)
-    
     return (start, end) if end != "該時段無法預約" else (start, "")
 def mail(to, sub, body):
     user, pwd = os.getenv("GMAIL_USER"), os.getenv("GMAIL_APP_PASSWORD")
@@ -226,23 +197,19 @@ with t1:
                 st.error("預約失敗：發起人必須在與會名單內。")
                 st.session_state.pop("force_book", None)
             else:
-                # 檢查自身行程是否重疊
                 overlap_id = user_hit(st.session_state.uid, date, start, end)
-                
-                # 如果有重疊，且使用者還沒有點擊「堅持預約」
                 if overlap_id and not st.session_state.get("force_book"):
                     st.warning(f"⚠️ 提示：您在該時段已參與其他會議（會議代碼：{overlap_id}），請確認是否仍要預約此時段？")
                     if st.button("我了解，仍要確認預約"):
                         st.session_state.force_book = True
                         st.rerun()
                 else:
-                    # 執行正式預約
                     data = db()
                     b = {"id":f"BK{int(time.time())}","title":title,"room":room,"date":date,"start":start,"end":end,"org":st.session_state.uid,"org_name":me["name"],"people":people}
                     data["bookings"].append(b)
                     save(data)
                     mail_booking(b)
-                    st.session_state.pop("force_book", None) # 預約成功後清除狀態
+                    st.session_state.pop("force_book", None)
                     st.success(f"預約成功：{b['id']}")
     st.subheader("我的可管理預約")
     data = db()
