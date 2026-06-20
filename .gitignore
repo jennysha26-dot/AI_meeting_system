@@ -1,0 +1,13 @@
+# 忽略所有 Word 和 Excel 檔案（防止 GitHub 肥大與 AI 亂讀）
+document/
+*.docx
+*.xlsx
+*.xls
+
+# 忽略 Python 執行時自動產生的垃圾緩存（超燒 Token！）
+__pycache__/
+*.pyc
+
+# 如果你有用虛擬環境，也請忽略
+venv/
+.venv/
