@@ -1,3 +1,5 @@
+.DS_Store
+
 # 忽略所有 Word 和 Excel 檔案（防止 GitHub 肥大與 AI 亂讀）
 docs/
 *.docx
