@@ -189,21 +189,26 @@ with t1:
                     data=db(); b={"id":f"BK{int(time.time())}","title":title,"room":room,"date":date,"start":start,"end":end,"org":st.session_state.uid,"org_name":me["name"],"people":people}
                     data["bookings"].append(b); save(data); mail_booking(b); st.session_state.pop("force_book",None); st.success(f"預約成功：{b['id']}")
     st.subheader("我的可管理預約")
-    data=db()
-    for b in [x for x in data["bookings"] if x["org"]==st.session_state.uid]:
-        with st.expander(f"{b['id']}｜{b['title']}｜{b['date']} {b['start']}-{b['end']}"):
-            nd=str(st.date_input("新日期",dtime(b["date"],b["start"]).date(),key="d"+b["id"]))
-            c1,c2=st.columns(2)
-            ns=c1.selectbox("新開始",ts(),ts().index(b["start"]),key="s"+b["id"])
-            ne=c2.selectbox("新結束",ts(),ts().index(b["end"]),key="e"+b["id"])
-            if st.button("變更時間",key="u"+b["id"]):
-                err=valid(b["date"],b["start"],b["end"]) or valid(nd,ns,ne) or ("變更失敗：新時段與既有預約或前後 30 分鐘緩衝期衝突。" if hit(b["room"],nd,ns,ne,b["id"]) else "")
+data=db()
+for b in [x for x in data["bookings"] if x["org"]==st.session_state.uid]:
+    with st.expander(f"{b['id']}｜{b['title']}｜{b['date']} {b['start']}-{b['end']} ({b['room']})"):
+        nr=st.selectbox("新會議室",["A會議室","B會議室","C會議室"],["A會議室","B會議室","C會議室"].index(b["room"]),key="r"+b["id"])
+        nd=str(st.date_input("新日期",dtime(b["date"],b["start"]).date(),key="d"+b["id"]))
+        ns,ne=time_grid(nr,nd)
+        st.caption(f"新時段：{ns or '--:--'} ~ {ne or '--:--'}")
+        if st.button("變更會議",key="u"+b["id"]):
+            if not ns or not ne: st.error("變更失敗：新選擇的時段或會議室無法預約。")
+            else:
+                err=valid(nd,ns,ne) or ("變更失敗：新時段與既有預約或前後 30 分鐘緩衝期衝突。" if hit(nr,nd,ns,ne,b["id"]) else "")
                 if err: st.error(err)
-                else: b.update({"date":nd,"start":ns,"end":ne}); save(data); mail_booking(b,"會議異動"); st.success("已變更")
-            if st.button("取消會議",key="c"+b["id"]):
-                err=valid(b["date"],b["start"],b["end"])
-                if err: st.error(err)
-                else: data["bookings"]=[x for x in data["bookings"] if x["id"]!=b["id"]]; save(data); mail_booking(b,"會議取消"); st.success("已取消")
+                else:
+                    old_b=b.copy()
+                    b.update({"room":nr,"date":nd,"start":ns,"end":ne})
+                    save(data); mail_booking(b,old_b=old_b,mode="update"); st.success("已變更"); st.rerun()
+        if st.button("取消會議",key="c"+b["id"]):
+            err=valid(b["date"],b["start"],b["end"])
+            if err: st.error(err)
+            else: data["bookings"]=[x for x in data["bookings"] if x["id"]!=b["id"]]; save(data); mail_booking(b,mode="cancel"); st.success("已取消"); st.rerun()
 with t2:
     own=[b for b in db()["bookings"] if b["org"]==st.session_state.uid]
     if not own: st.info("請先建立一筆由你發起的會議。")
