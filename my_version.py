@@ -16,7 +16,8 @@ def save(db):
 def db():
     if not os.path.exists(DB): save({"bookings":[],"reports":[]})
     with open(DB,encoding="utf-8") as f: return json.load(f)
-def ts(): return [f"{h:02d}:{m:02d}" for h in range(9,21) for m in (0,30)] + ["21:00"]
+def ts():
+    return [f"{h:02d}:{m:02d}" for h in range(9, 22) for m in range(0, 60, 10)] + ["21:00"]
 def dtime(d,t): return dt.datetime.strptime(f"{d} {t}","%Y-%m-%d %H:%M")
 def valid(d,s,e):
     a,b=dtime(d,s),dtime(d,e)
@@ -34,60 +35,71 @@ def user_hit(uid,d,s,e):
 def time_grid(room, d, def_s=None, def_e=None):
     times = ts()
     bookings = [x for x in db()["bookings"] if x["room"] == room and x["date"] == d and not (def_s and x["start"] == def_s and x["end"] == def_e)]
+    limit_t = dt.datetime.now() + dt.timedelta(hours=1)
+    
     def is_slot_busy(s):
         t = dtime(d, s)
-        return any(dtime(d, b["start"]) - dt.timedelta(minutes=30) <= t < dtime(d, b["end"]) + dt.timedelta(minutes=30) for b in bookings) or t <= dt.datetime.now() + dt.timedelta(hours=1) 
+        if t <= limit_t: return True
+        return any(dtime(d, b["start"]) - dt.timedelta(minutes=30) <= t < dtime(d, b["end"]) + dt.timedelta(minutes=30) for b in bookings)
+
+    valid_starts = [s for s in times[:-1] if dtime(d, s) > limit_t]
+    if not valid_starts:
+        st.error("當日已無可預約時段"); return ("", "")
+
     c_s, c_e = st.columns(2)
     with c_s:
-        start = st.selectbox("開始時間", times[:-1], index=times.index(def_s) if def_s in times[:-1] else 0, key=f"sel_s_{room}_{d}_{def_s}")
+        start = st.selectbox("開始時間", valid_starts, index=valid_starts.index(def_s) if def_s in valid_starts else 0, key=f"sel_s_{room}_{d}_{def_s}")
+    
     with c_e:
         valid_ends = []
-        if not is_slot_busy(start):
-            for e in times[times.index(start)+1:]:
-                if is_slot_busy(times[times.index(e)-1]): break
-                valid_ends.append(e)
-        if valid_ends:
-            end = st.selectbox("結束時間", valid_ends, index=valid_ends.index(def_e) if def_e in valid_ends else 0, key=f"sel_e_{room}_{d}_{def_s}")
-        else:
-            end = "該時段無法預約"; st.selectbox("結束時間", ["該時段無法預約"], disabled=True, key=f"sel_e_{room}_{d}_{def_s}")          
+        start_idx = times.index(start)
+        for e in times[start_idx+3:]:
+            if any(is_slot_busy(times[step]) for step in range(start_idx, times.index(e))): break
+            valid_ends.append(e)
+        end = st.selectbox("結束時間", valid_ends if valid_ends else ["該時段無法預約"], disabled=not valid_ends, key=f"sel_e_{room}_{d}_{def_s}")
+        if not valid_ends: end = "該時段無法預約"
+
     st.markdown("<p style='font-size:14px; font-weight:bold; margin-top:15px; margin-bottom:5px;'>會議室當日預訂狀態時間軸</p>", unsafe_allow_html=True)
     st.markdown("""
         <style>
         div[data-testid='stHorizontalBlock'] > div { min-width: 0px !important; padding: 0px !important; }
-        .timeline-container { display: flex; width: 100%; border: 1px solid #cbd5e1; height: 35px; border-radius: 6px; overflow: hidden; }
-        .timeline-labels { display: flex; width: 100%; position: relative; height: 25px; margin-top: 4px; }
-        .timeline-label-item { position: absolute; transform: translateX(-50%); font-size: 11px; font-weight: 600; color: #475569; white-space: nowrap; }
+        .timeline-container { display: flex; width: 100%; border: 1px solid #cbd5e1; height: 35px; border-radius: 6px; overflow: hidden; background-color: #ffffff; margin-bottom: 25px; }
+        .timeline-label-item { position: absolute; transform: translateX(-50%); font-size: 11px; font-weight: 600; color: #475569; white-space: nowrap; top: 39px; }
         </style>
     """, unsafe_allow_html=True)
+
     active_labels = { "09:00": 0.0, "21:00": 100.0 }
     t_base = dt.datetime.strptime(f"{d} 09:00", "%Y-%m-%d %H:%M")
     get_pos = lambda ts_str: ((dt.datetime.strptime(f"{d} {ts_str}", "%Y-%m-%d %H:%M") - t_base).total_seconds() / 43200) * 100    
-    is_past_day = dt.datetime.now().date() > dt.datetime.strptime(d, "%Y-%m-%d").date()    
-    if not is_past_day:
-        past_limit = dt.datetime.now() + dt.timedelta(hours=1)
-        if t_base < past_limit < t_base + dt.timedelta(hours=12):
-            mins_rem = past_limit.minute % 30
-            if mins_rem != 0: past_limit += dt.timedelta(minutes=(30 - mins_rem))
-            past_str = past_limit.strftime("%H:%M")
-            active_labels[past_str] = get_pos(past_str)
-        if end != "該時段無法預約" and start and end:
-            active_labels[start], active_labels[end] = get_pos(start), get_pos(end)
-        for b in bookings:
-            b_s = dtime(d, b["start"]) - dt.timedelta(minutes=30)
-            b_e = dtime(d, b["end"]) + dt.timedelta(minutes=30)
-            if t_base <= b_s <= t_base + dt.timedelta(hours=12): active_labels[b_s.strftime("%H:%M")] = get_pos(b_s.strftime("%H:%M"))
-            if t_base <= b_e <= t_base + dt.timedelta(hours=12): active_labels[b_e.strftime("%H:%M")] = get_pos(b_e.strftime("%H:%M"))           
-    bar_html = "<div class='timeline-container'>"
+    
+    if end != "該時段無法預約" and start and end:
+        active_labels[start], active_labels[end] = get_pos(start), get_pos(end)
+
+    for b in bookings:
+        bs_dt, be_dt = dtime(d, b["start"]) - dt.timedelta(minutes=30), dtime(d, b["end"]) + dt.timedelta(minutes=30)
+        bs = bs_dt.strftime("%H:%M") if bs_dt >= t_base else "09:00"
+        be = be_dt.strftime("%H:%M") if be_dt <= dtime(d, "21:00") else "21:00"
+        active_labels[bs], active_labels[be] = get_pos(bs), get_pos(be)
+
+    if t_base <= limit_t <= dtime(d, "21:00"):
+        lim_str = limit_t.strftime("%H:%M")[:-1] + "0"
+        active_labels[lim_str] = get_pos(lim_str)
+
+    bar_html = "<div style='position: relative; width: 100%;'><div class='timeline-container'>"
     for s in times[:-1]:
-        if end != "該時段無法預約" and start and end and dtime(d, start) <= dtime(d, s) < dtime(d, end): bg_style = "background-color: #4ade80;"
-        elif is_slot_busy(s): bg_style = "background-color: #e2e8f0; background-image: linear-gradient(45deg, #cbd5e1 25%, transparent 25%, transparent 50%, #cbd5e1 50%, #cbd5e1 75%, transparent 75%, transparent); background-size: 8px 8px;"
-        else: bg_style = "background-color: #ffffff;"
-        bar_html += f"<div style='flex: 1; {bg_style}' title='{s}'></div>"
-    bar_html += "</div>"; st.markdown(bar_html, unsafe_allow_html=True)
-    labels_html = "<div class='timeline-labels'>"
+        is_selected = (end != "該時段無法預約" and start and end and dtime(d, start) <= dtime(d, s) < dtime(d, end))
+        bg_style = "background-color: #4ade80;" if is_selected else ("background-color: #e2e8f0; background-image: linear-gradient(45deg, #cbd5e1 25%, transparent 25%, transparent 50%, #cbd5e1 50%, #cbd5e1 75%, transparent 75%, transparent); background-size: 8px 8px;" if is_slot_busy(s) else "background-color: #ffffff;")
+        bar_html += f"<div style='width: calc(100% / 72); flex-shrink: 0; {bg_style}' title='{s}'></div>"
+    bar_html += "</div>"
+
+    filtered_labels = []
     for s, pos in sorted(active_labels.items(), key=lambda x: x[1]):
-        labels_html += f"<div class='timeline-label-item' style='left: {pos}%;'>{s}</div>"
-    labels_html += "</div>"; st.markdown(labels_html, unsafe_allow_html=True)
+        if any(abs(pos - fp) < 3.5 for _, fp in filtered_labels) and s not in ["09:00", "21:00", start, end]: continue
+        filtered_labels.append((s, pos))
+        bar_html += f"<div class='timeline-label-item' style='left: {pos}%;'>{s}</div>"
+    bar_html += "</div></div><br>"
+
+    st.markdown(bar_html, unsafe_allow_html=True)
     st.markdown("""
         <div style='display: flex; gap: 20px; font-size: 12px; margin-top: 5px; justify-content: center;'>
             <div style='display: flex; align-items: center; gap: 6px;'><div style='width: 14px; height: 14px; background: #4ade80; border-radius: 3px;'></div>已選擇</div>
