@@ -1,4 +1,6 @@
 import os,json,time,smtplib,datetime as dt
+from dotenv import load_dotenv
+load_dotenv()
 from email.mime.text import MIMEText
 import streamlit as st
 from pydantic import BaseModel,Field
@@ -92,7 +94,8 @@ def time_grid(room, d):
     """, unsafe_allow_html=True)  
     return (start, end) if end != "該時段無法預約" else (start, "")
 def mail(to,sub,body):
-    user,pwd=os.getenv("GMAIL_USER"),os.getenv("GMAIL_APP_PASSWORD")
+    user = os.getenv("GMAIL_USER", "").strip().replace("\xa0", " ")
+    pwd = os.getenv("GMAIL_APP_PASSWORD", "").strip().replace("\xa0", "")
     if not user or not pwd: st.info(f"[測試模式未寄信] {to}｜{sub}"); return False
     msg=MIMEText(body,"plain","utf-8"); msg["Subject"],msg["From"],msg["To"]=sub,user,to
     with smtplib.SMTP("smtp.gmail.com",587) as s: s.starttls(); s.login(user,pwd); s.send_message(msg)
