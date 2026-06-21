@@ -32,7 +32,8 @@ def user_hit(uid,d,s,e):
     a,b=dtime(d,s),dtime(d,e)
     return next((x["id"] for x in db()["bookings"] if uid in x["people"] and x["date"]==d and a<dtime(d,x["end"]) and b>dtime(d,x["start"])),"")
 def time_grid(room, d, def_s=None, def_e=None):
-    times = ts(); bookings = [x for x in db()["bookings"] if x["room"] == room and x["date"] == d and x["start"] != def_s]
+    times = ts()
+    bookings = [x for x in db()["bookings"] if x["room"] == room and x["date"] == d and not (def_s and x["start"] == def_s and x["end"] == def_e)]
     def is_slot_busy(s):
         t = dtime(d, s)
         return any(dtime(d, b["start"]) - dt.timedelta(minutes=30) <= t < dtime(d, b["end"]) + dt.timedelta(minutes=30) for b in bookings) or t <= dt.datetime.now() + dt.timedelta(hours=1) 
@@ -79,7 +80,7 @@ def time_grid(room, d, def_s=None, def_e=None):
     bar_html = "<div class='timeline-container'>"
     for s in times[:-1]:
         if end != "該時段無法預約" and start and end and dtime(d, start) <= dtime(d, s) < dtime(d, end): bg_style = "background-color: #4ade80;"
-        elif any(dtime(d, b["start"]) - dt.timedelta(minutes=30) <= dtime(d, s) < dtime(d, b["end"]) + dt.timedelta(minutes=30) for b in bookings) or dtime(d, s) <= dt.datetime.now() + dt.timedelta(hours=1): bg_style = "background-color: #e2e8f0; background-image: linear-gradient(45deg, #cbd5e1 25%, transparent 25%, transparent 50%, #cbd5e1 50%, #cbd5e1 75%, transparent 75%, transparent); background-size: 8px 8px;"
+        elif is_slot_busy(s): bg_style = "background-color: #e2e8f0; background-image: linear-gradient(45deg, #cbd5e1 25%, transparent 25%, transparent 50%, #cbd5e1 50%, #cbd5e1 75%, transparent 75%, transparent); background-size: 8px 8px;"
         else: bg_style = "background-color: #ffffff;"
         bar_html += f"<div style='flex: 1; {bg_style}' title='{s}'></div>"
     bar_html += "</div>"; st.markdown(bar_html, unsafe_allow_html=True)
