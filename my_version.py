@@ -31,22 +31,24 @@ def hit(room,d,s,e,skip=""):
 def user_hit(uid,d,s,e):
     a,b=dtime(d,s),dtime(d,e)
     return next((x["id"] for x in db()["bookings"] if uid in x["people"] and x["date"]==d and a<dtime(d,x["end"]) and b>dtime(d,x["start"])),"")
-def time_grid(room, d):
-    times = ts(); bookings = [x for x in db()["bookings"] if x["room"] == room and x["date"] == d]
+def time_grid(room, d, def_s=None, def_e=None):
+    times = ts(); bookings = [x for x in db()["bookings"] if x["room"] == room and x["date"] == d and x["start"] != def_s]
     def is_slot_busy(s):
         t = dtime(d, s)
         return any(dtime(d, b["start"]) - dt.timedelta(minutes=30) <= t < dtime(d, b["end"]) + dt.timedelta(minutes=30) for b in bookings) or t <= dt.datetime.now() + dt.timedelta(hours=1) 
     c_s, c_e = st.columns(2)
-    with c_s: start = st.selectbox("開始時間", times[:-1], key=f"sel_s_{room}_{d}")
+    with c_s:
+        start = st.selectbox("開始時間", times[:-1], index=times.index(def_s) if def_s in times[:-1] else 0, key=f"sel_s_{room}_{d}_{def_s}")
     with c_e:
-        if is_slot_busy(start): end = "該時段無法預約"; st.selectbox("結束時間", ["該時段無法預約"], disabled=True, key=f"sel_e_{room}_{d}")
-        else:
-            valid_ends = []
+        valid_ends = []
+        if not is_slot_busy(start):
             for e in times[times.index(start)+1:]:
                 if is_slot_busy(times[times.index(e)-1]): break
                 valid_ends.append(e)
-            if valid_ends: end = st.selectbox("結束時間", valid_ends, key=f"sel_e_{room}_{d}")
-            else: end = "該時段無法預約"; st.selectbox("結束時間", ["該時段無法預約"], disabled=True, key=f"sel_e_{room}_{d}")          
+        if valid_ends:
+            end = st.selectbox("結束時間", valid_ends, index=valid_ends.index(def_e) if def_e in valid_ends else 0, key=f"sel_e_{room}_{d}_{def_s}")
+        else:
+            end = "該時段無法預約"; st.selectbox("結束時間", ["該時段無法預約"], disabled=True, key=f"sel_e_{room}_{d}_{def_s}")          
     st.markdown("<p style='font-size:14px; font-weight:bold; margin-top:15px; margin-bottom:5px;'>會議室當日預訂狀態時間軸</p>", unsafe_allow_html=True)
     st.markdown("""
         <style>
@@ -77,7 +79,7 @@ def time_grid(room, d):
     bar_html = "<div class='timeline-container'>"
     for s in times[:-1]:
         if end != "該時段無法預約" and start and end and dtime(d, start) <= dtime(d, s) < dtime(d, end): bg_style = "background-color: #4ade80;"
-        elif is_slot_busy(s): bg_style = "background-color: #e2e8f0; background-image: linear-gradient(45deg, #cbd5e1 25%, transparent 25%, transparent 50%, #cbd5e1 50%, #cbd5e1 75%, transparent 75%, transparent); background-size: 8px 8px;"
+        elif any(dtime(d, b["start"]) - dt.timedelta(minutes=30) <= dtime(d, s) < dtime(d, b["end"]) + dt.timedelta(minutes=30) for b in bookings) or dtime(d, s) <= dt.datetime.now() + dt.timedelta(hours=1): bg_style = "background-color: #e2e8f0; background-image: linear-gradient(45deg, #cbd5e1 25%, transparent 25%, transparent 50%, #cbd5e1 50%, #cbd5e1 75%, transparent 75%, transparent); background-size: 8px 8px;"
         else: bg_style = "background-color: #ffffff;"
         bar_html += f"<div style='flex: 1; {bg_style}' title='{s}'></div>"
     bar_html += "</div>"; st.markdown(bar_html, unsafe_allow_html=True)
@@ -194,10 +196,11 @@ for b in [x for x in data["bookings"] if x["org"]==st.session_state.uid]:
     with st.expander(f"{b['id']}｜{b['title']}｜{b['date']} {b['start']}-{b['end']} ({b['room']})"):
         nr=st.selectbox("新會議室",["A會議室","B會議室","C會議室"],["A會議室","B會議室","C會議室"].index(b["room"]),key="r"+b["id"])
         nd=str(st.date_input("新日期",dtime(b["date"],b["start"]).date(),key="d"+b["id"]))
-        ns,ne=time_grid(nr,nd)
+        ns,ne=time_grid(nr,nd,def_s=b["start"],def_e=b["end"])
         st.caption(f"新時段：{ns or '--:--'} ~ {ne or '--:--'}")
         if st.button("變更會議",key="u"+b["id"]):
             if not ns or not ne: st.error("變更失敗：新選擇的時段或會議室無法預約。")
+            elif (dtime(b["date"],b["start"])-dt.datetime.now()).total_seconds()<3600: st.error("操作失敗：會議變更必須在會議開始 1 小時前進行。")
             else:
                 err=valid(nd,ns,ne) or ("變更失敗：新時段與既有預約或前後 30 分鐘緩衝期衝突。" if hit(nr,nd,ns,ne,b["id"]) else "")
                 if err: st.error(err)
@@ -206,8 +209,7 @@ for b in [x for x in data["bookings"] if x["org"]==st.session_state.uid]:
                     b.update({"room":nr,"date":nd,"start":ns,"end":ne})
                     save(data); mail_booking(b,old_b=old_b,mode="update"); st.success("已變更"); st.rerun()
         if st.button("取消會議",key="c"+b["id"]):
-            err=valid(b["date"],b["start"],b["end"])
-            if err: st.error(err)
+            if (dtime(b["date"],b["start"])-dt.datetime.now()).total_seconds()<3600: st.error("操作失敗：會議取消必須在會議開始 1 小時前進行。")
             else: data["bookings"]=[x for x in data["bookings"] if x["id"]!=b["id"]]; save(data); mail_booking(b,mode="cancel"); st.success("已取消"); st.rerun()
 with t2:
     own=[b for b in db()["bookings"] if b["org"]==st.session_state.uid]
