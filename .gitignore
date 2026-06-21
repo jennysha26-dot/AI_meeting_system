@@ -11,3 +11,5 @@ __pycache__/
 # 如果你有用虛擬環境，也請忽略
 venv/
 .venv/
+
+.env
