@@ -100,9 +100,27 @@ def mail(to,sub,body):
     msg=MIMEText(body,"plain","utf-8"); msg["Subject"],msg["From"],msg["To"]=sub,user,to
     with smtplib.SMTP("smtp.gmail.com",587) as s: s.starttls(); s.login(user,pwd); s.send_message(msg)
     return True
-def mail_booking(b,sub="會議通知"):
+def mail_booking(b, old_b=None, mode="create"):
+    sub_map = {
+        "create": (f"會議通知：{b['title']}", lambda p: f"{p['name']}，您於 {b['date']} {b['start']} 有一場關於 {b['title']} 的會議，地點在 {b['room']}，發起人為 {b['org_name']}，請備好相關文件，務必於會議開始前10分鐘抵達 {b['room']}。"),
+        "cancel": (f"會議取消通知：{b['title']}", lambda p: f"{p['name']}，您於 {b['date']} {b['start']} 關於 {b['title']} 的會議已取消，請留意後續會議時程調整通知。"),
+        "time": (f"會議時程更動通知：{b['title']}", lambda p: f"{p['name']}，關於您參與的 {b['title']} 的會議時程已更動至 {b['date']} {b['start']}，地點在 {b['room']}，發起人為 {b['org_name']}，請備好相關文件，留意更動時程，務必於會議開始前10分鐘抵達 {b['room']}。"),
+        "room": (f"會議地點更動通知：{b['title']}", lambda p: f"{p['name']}，您於 {b['date']} {b['start']} 有一場關於 {b['title']} 的會議，地點更改為 {b['room']}，發起人為 {b['org_name']}，請備好相關文件，務必於會議開始前10分鐘抵達 {b['room']}。"),
+        "both": (f"會議時程與地點更動通知：{b['title']}", lambda p: f"{p['name']}，關於您參與的 {b['title']} 的會議時程已更動至 {b['date']} {b['start']}，地點更改在 {b['room']}，發起人為 {b['org_name']}，請備好相關文件，留意更動時程，務必於會議開始前10分鐘抵達 {b['room']}。")
+    }
+    if mode == "update" and old_b:
+        t_chg = (old_b["date"] != b["date"] or old_b["start"] != b["start"])
+        r_chg = (old_b["room"] != b["room"])
+        if t_chg and r_chg: mode = "both"
+        elif t_chg: mode = "time"
+        elif r_chg: mode = "room"
+        else: return True
+    sub, body_func = sub_map.get(mode, sub_map["create"])
     for eid in b["people"]:
-        p=EMP[eid]; mail(p["email"],f"{sub}：{b['title']}",f"{p['name']}，您於 {b['date']} {b['start']} 有一場關於 {b['title']} 的會議，發起人為 {b['org_name']}。")
+        if eid in EMP:
+            p = EMP[eid]
+            mail(p["email"], sub, body_func(p))
+    return True
 def report_body(r):
     rr=r["report"]
     return f"""會議大綱：{rr['meeting_title']}
