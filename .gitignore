@@ -3,6 +3,8 @@ document/
 *.docx
 *.xlsx
 *.xls
+*.pdf
+*.pptx
 
 # 忽略 Python 執行時自動產生的垃圾緩存（超燒 Token！）
 __pycache__/
@@ -13,3 +15,6 @@ venv/
 .venv/
 
 .env
+
+~$*.docx
+~$*.xlsx
