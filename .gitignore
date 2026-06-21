@@ -1,10 +1,11 @@
 # 忽略所有 Word 和 Excel 檔案（防止 GitHub 肥大與 AI 亂讀）
-document/
+docs/
 *.docx
 *.xlsx
 *.xls
 *.pdf
 *.pptx
+STT.py
 
 # 忽略 Python 執行時自動產生的垃圾緩存（超燒 Token！）
 __pycache__/
