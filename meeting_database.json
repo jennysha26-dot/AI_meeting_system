@@ -68,7 +68,136 @@
       "people": [
         "C123456789"
       ]
+    },
+    {
+      "id": "BK1782200452",
+      "title": "核心系統專案討論會",
+      "room": "A會議室",
+      "date": "2026-06-23",
+      "start": "17:30",
+      "end": "19:00",
+      "org": "C123456789",
+      "org_name": "思妤",
+      "people": [
+        "C123456789",
+        "B123456789",
+        "A123456789"
+      ]
+    },
+    {
+      "id": "BK1782200638",
+      "title": "核心系統專案討論會",
+      "room": "A會議室",
+      "date": "2026-06-27",
+      "start": "10:30",
+      "end": "11:00",
+      "org": "D123456789",
+      "org_name": "韋丞",
+      "people": [
+        "E123456789",
+        "D123456789"
+      ]
+    },
+    {
+      "id": "BK1782201335",
+      "title": "核心系統專案討論會",
+      "room": "B會議室",
+      "date": "2026-06-30",
+      "start": "11:00",
+      "end": "11:30",
+      "org": "A123456789",
+      "org_name": "查理",
+      "people": [
+        "A123456789",
+        "B123456789",
+        "C123456789",
+        "D123456789",
+        "E123456789"
+      ]
+    },
+    {
+      "id": "BK1782281622",
+      "title": "核心系統專案討論會",
+      "room": "A會議室",
+      "date": "2026-06-25",
+      "start": "09:00",
+      "end": "09:30",
+      "org": "F123456789",
+      "org_name": "Ned",
+      "people": [
+        "F123456789",
+        "A123456789",
+        "B123456789",
+        "C123456789",
+        "D123456789",
+        "E123456789"
+      ]
+    },
+    {
+      "id": "BK1782281640",
+      "title": "核心系統專案討論會",
+      "room": "A會議室",
+      "date": "2026-06-26",
+      "start": "09:00",
+      "end": "09:30",
+      "org": "F123456789",
+      "org_name": "Ned",
+      "people": [
+        "F123456789",
+        "A123456789",
+        "B123456789",
+        "C123456789",
+        "D123456789",
+        "E123456789"
+      ]
     }
   ],
-  "reports": []
+  "reports": [
+    {
+      "id": "RP1782284502",
+      "booking_id": "BK1782201335",
+      "transcript": "報告一下目前系統開發進度研發部的Roberto Smith最近為了版測試進度經常加班雖然KPI很多但要注意公時另外Holo Laner這個月有遲到記錄請HR關心一下狀況",
+      "report": {
+        "meeting_title": "系統開發進度與人員管理",
+        "executive_summary": "研發部Roberto Smith為版測試進度常加班，需注意工時；Holo Laner有遲到記錄，請HR關心。",
+        "key_topics": [
+          "系統開發進度",
+          "版測試進度",
+          "公時管理",
+          "人員出勤狀況"
+        ],
+        "action_items": [
+          "研發部Roberto Smith：注意公時，避免過勞。",
+          "HR：關心Holo Laner遲到狀況。"
+        ]
+      },
+      "is_confirmed": true,
+      "sent": true,
+      "created": 1782284502.3288293
+    }
+  ],
+  "employees": {
+    "F123456789": {
+      "name": "Ned",
+      "birthday": "20000606",
+      "email": "ned08300917@gmail.com",
+      "dept": "製造部",
+      "role": "Employee"
+    }
+  },
+  "account_requests": [],
+  "login_sessions": {
+    "WcgQtRPUsU3RPppumXotXM_LtRs6-3qbz9RgWGZ3dZk": {
+      "uid": "C123456789",
+      "expires": 1782370426.4553556
+    },
+    "-xrAMZ9aY7qyYCPucpcMnz57TRtVHcYsB3LF9T02-ZI": {
+      "uid": "A123456789",
+      "expires": 1782370962.8830469
+    },
+    "Msi4o6fWo64Yys9y-sfjwAu6xqnu_TJuDZ3B5N5AWLI": {
+      "uid": "C123456789",
+      "expires": 1782371929.037675
+    }
+  }
 }
