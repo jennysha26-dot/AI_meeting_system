@@ -18,9 +18,6 @@ from streamlit.runtime.scriptrunner import get_script_run_ctx
 
 from pydantic import BaseModel, Field
 
-
-# 配置系統日誌
-
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 
 if get_script_run_ctx() is None:
@@ -103,13 +100,6 @@ def employee_label(eid):
 def attendee_names(people):
     return "、".join(employee_label(eid) for eid in people) if people else "無"
 
-
-# ==========================================
-
-# 📋 Pydantic Schema：強型別 AI 輸出規格
-
-# ==========================================
-
 class GeminiMeetingReport(BaseModel):
 
     meeting_title: str = Field(description="正式會議主題")
@@ -119,13 +109,6 @@ class GeminiMeetingReport(BaseModel):
     key_topics: list[str] = Field(description="主要議題與下次會議目標")
 
     action_items: list[str] = Field(description="責任人、待辦事項與期限")
-
-
-# ==========================================
-
-# 🏢 資料庫與時間驗證核心邏輯
-
-# ==========================================
 
 def save(db):
 
@@ -583,13 +566,6 @@ def time_grid(room, d, def_s=None, def_e=None):
 
     return (start, end) if end != "該時段無法預約" else (start, "")
 
-
-# ==========================================
-
-# 🚀 【查理/永和分支】後端 API 模組封裝
-
-# ==========================================
-
 def ensure_local_ffmpeg():
 
     """把 imageio-ffmpeg 內建的 ffmpeg 加進 PATH，避免要求使用者另外裝系統 FFmpeg。"""
@@ -836,13 +812,6 @@ def api_send_real_email(to_email, subject, body, sender_id="", to_name=""):
 
         return False
 
-
-# ==========================================
-
-# 📧 內部寄信邏輯 (依賴 API 3)
-
-# ==========================================
-
 def mail_booking(b, old_b=None, mode="create"):
 
     sub_map = {
@@ -902,13 +871,6 @@ def mail_report(r):
 
     return 0, ["找不到對應會議"]
 
-
-# ==========================================
-
-# 🕒 背景計時器：180 秒催簽檢查
-
-# ==========================================
-
 def remind_worker(rid, email, title):
 
     time.sleep(180)
@@ -950,13 +912,6 @@ def auto_mail():
 
     if changed: save(data)
 
-
-# ==========================================
-
-# 🎨 系統 UI 與前端渲染
-
-# ==========================================
-
 st.set_page_config("AI 智慧會議室管理系統", layout="wide"); auto_mail()
 
 
@@ -983,7 +938,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-st.title("🏢 智慧會議室排程與 AI 決策看板")
+st.title("智慧會議室排程與 AI 決策看板")
 
 
 load_dynamic_employees()
@@ -1073,7 +1028,7 @@ c_user, c_logout = st.columns([8, 1])
 
 with c_user:
 
-    role_badge = f'<span class="meta-tag tag-boss">👑 {me["role"]}</span>' if me["role"] in ("Boss", "SuperAdmin") else f'<span class="meta-tag tag-emp">👤 同仁</span>'
+    role_badge = f'<span class="meta-tag tag-boss">{me["role"]}</span>' if me["role"] in ("Boss", "SuperAdmin") else f'<span class="meta-tag tag-emp">同仁</span>'
 
     st.markdown(f"**當前使用者**：{me['name']} ｜ 部門：{me['dept']} ｜ 系統權限：{role_badge}", unsafe_allow_html=True)
 
@@ -1101,20 +1056,17 @@ inject_auto_refresh(refresh_seconds)
 
 st.markdown("---")
 
-tab_labels = ["🗓️ 會議排程申請", "🎙️ 錄音音訊摘要", "📊 企業會議紀錄"]
+tab_labels = ["會議排程申請", "錄音音訊摘要", "企業會議紀錄"]
 
 if admin_mode:
 
-    tab_labels.append("✅ 帳號審核")
+    tab_labels.append("帳號審核")
 
 tabs = st.tabs(tab_labels)
 
 t1, t2, t3 = tabs[:3]
 
 t4 = tabs[3] if admin_mode else None
-
-
-# --- 頁籤一：會議預約 ---
 
 with t1:
 
@@ -1160,13 +1112,13 @@ with t1:
 
     
 
-    st.subheader("⚙️ 行程變更與異動管理")
+    st.subheader("行程變更與異動管理")
 
     data = db()
 
     for b in visible_bookings(data, st.session_state.uid):
 
-        with st.expander(f"📝 變更: {b['id']} ｜ {b['title']} ｜ {b['date']} {b['start']}-{b['end']}"):
+        with st.expander(f"變更: {b['id']} ｜ {b['title']} ｜ {b['date']} {b['start']}-{b['end']}"):
 
             st.markdown(f"**發起人**：{employee_label(b.get('org', ''))}")
 
@@ -1176,7 +1128,7 @@ with t1:
 
                 st.info("此會議已結束，無法再修改時程。")
 
-                if st.button("🗑️ 刪除此歷史會議", key="c"+b["id"], use_container_width=True):
+                if st.button("刪除此歷史會議", key="c"+b["id"], use_container_width=True):
 
                     data["bookings"] = [x for x in data["bookings"] if x["id"] != b["id"]]; save(data); st.success("已刪除歷史會議"); st.rerun()
 
@@ -1194,7 +1146,7 @@ with t1:
 
             with c_up:
 
-                if st.button("💾 儲存時間變更", key="u"+b["id"], use_container_width=True):
+                if st.button("儲存時間變更", key="u"+b["id"], use_container_width=True):
 
                     if not ns or not ne: st.error("變更失敗：無法預約。")
 
@@ -1208,38 +1160,29 @@ with t1:
 
             with c_del:
 
-                if st.button("🗑️ 撤銷此場會議", key="c"+b["id"], use_container_width=True):
+                if st.button("撤銷此場會議", key="c"+b["id"], use_container_width=True):
 
                     data["bookings"] = [x for x in data["bookings"] if x["id"] != b["id"]]; save(data); mail_booking(b, mode="cancel"); st.success("已成功撤銷會議"); st.rerun()
-
-
-# --- 頁籤二：錄音上傳與 AI 摘要 ---
 
 with t2:
 
     own = visible_bookings(db(), st.session_state.uid)
 
-    if not own: st.info("💡 目前尚無可操作的會議排程，建立預約後方可上傳開會錄音。")
+    if not own: st.info("目前尚無可操作的會議排程，建立預約後方可上傳開會錄音。")
 
     else:
 
-        pick = st.selectbox("🔗 關聯會議綁定：", own, format_func=lambda b: f"{b['id']}｜{EMP.get(b['org'], {}).get('name', b['org'])}｜{b['title']}")
+        pick = st.selectbox("關聯會議綁定：", own, format_func=lambda b: f"{b['id']}｜{EMP.get(b['org'], {}).get('name', b['org'])}｜{b['title']}")
 
-        audio = st.file_uploader("🎬 匯入現場開會音訊（支援 .mp3/.wav）：", type=["mp3", "wav"])
-
-        
-
-        # 🚀 【韋丞/哲豪分支】前端 UI 與後端真實 API 咬合
+        audio = st.file_uploader("匯入現場開會音訊（支援 .mp3/.wav）：", type=["mp3", "wav"])
 
         if audio is not None:
 
-            if st.button("✨ 提煉語音並派發 AI 任務", type="primary"):
+            if st.button("提煉語音並派發 AI 任務", type="primary"):
 
-                with st.spinner("🚀 AI 雙引擎連線中：Whisper 轉寫與 Gemini 提煉..."):
+                with st.spinner("AI 雙引擎連線中：Whisper 轉寫與 Gemini 提煉..."):
 
                     try:
-
-                        # 呼叫後端 API 取得真實數據 (拔除假資料)
 
                         real_text = api_transcribe_audio(audio)
 
@@ -1255,7 +1198,7 @@ with t2:
 
                         save(data)
 
-                        st.success("✅ 真實結構化報告已生成！背景 Thread 已啟動 180 秒催簽倒數。")
+                        st.success("真實結構化報告已生成！背景 Thread 已啟動 180 秒催簽倒數。")
 
                         
 
@@ -1268,15 +1211,15 @@ with t2:
 
         st.markdown("---")
 
-        st.subheader("📥 待確認與歷史摘要列表")
+        st.subheader("待確認與歷史摘要列表")
 
         booking_by_id = {b["id"]: b for b in own}
 
         for r in [x for x in db()["reports"] if x["booking_id"] in booking_by_id]:
 
-            status_text = "✅ 已全員分發" if r["sent"] else "⏳ 待審查發送 (180秒提醒)"
+            status_text = "已全員分發" if r["sent"] else "待審查發送 (180秒提醒)"
 
-            with st.expander(f"📋 報告單號: {r['id']} ｜ 狀態: {status_text}", expanded=not r["sent"]):
+            with st.expander(f"報告單號: {r['id']} ｜ 狀態: {status_text}", expanded=not r["sent"]):
 
                 render_report_bullets(r.get("report", {}), booking_by_id.get(r["booking_id"]))
 
@@ -1292,17 +1235,15 @@ with t2:
 
                 if not r["sent"]:
 
-                    # 🚀 待發送報告才顯示分發按鈕；已發送報告不再顯示。
-
                     c_send, c_delete = st.columns(2)
 
                     with c_send:
 
-                        if st.button("🚀 核准並一鍵分發公文給全員", key=r["id"], type="primary", use_container_width=True):
+                        if st.button("核准並一鍵分發公文給全員", key=r["id"], type="primary", use_container_width=True):
 
                             with st.spinner("真實郵件 SMTP 派送中..."):
 
-                                sent_count, failed = mail_report(r)  # 呼叫真實寄信函式
+                                sent_count, failed = mail_report(r) 
 
                                 if failed:
 
@@ -1338,7 +1279,7 @@ with t2:
 
                 with delete_container:
 
-                    if st.button("🗑️ 刪除此語音摘要與文稿", key=f"del_report_{r['id']}", use_container_width=True):
+                    if st.button("刪除此語音摘要與文稿", key=f"del_report_{r['id']}", use_container_width=True):
 
                         data = db()
 
