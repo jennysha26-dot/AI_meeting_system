@@ -1,44 +1,103 @@
-# Component Spec: 預約變更、取消與角色權限控管 (RBAC & Booking Control)
+# Component Spec: 行程變更、取消與角色權限控管
 
-## 1. 功能概述 (Overview)
-- 提供會議發起人（管理員）檢視、修改與取消自己所建立之會議（`org == st.session_state.uid`）的管理面板。
-- 透過 `st.expander` 動態載入個別會議的變更表單，並結合時間軸元件進行變更時段的衝突偵測。
+## 1. 功能概述
 
-## 2. 商業邏輯與防呆控管 (Control Rules)
-本模組負責執行系統最嚴格的狀態機防呆控管，確保數據有效性：
-- **發起人權限隔離**：使用者僅能看見並管理自己發起的會議（透過 `x["org"] == st.session_state.uid` 過濾）。
-- **1 小時前變更/取消限制**：無論變更或取消，會議的原本開始時間（`b["start"]`）距離當前時間必須大於 1 小時，否則無情阻擋（操作失敗）。
-- **新時段衝突偵測**：變更會議時，新選定的時間必須通過 `valid(nd, ns, ne)` 的基本格式驗證，且不能與該會議室其他預約的前後 30 分鐘緩衝期衝突（透過 `hit()` 偵測）。
+「行程變更與異動管理」提供使用者檢視、修改、撤銷自己可管理的會議。
 
-## 3. 資料庫更新與通知聯動 (Workflow)
-- **取消會議**：從 `data["bookings"]` 移除該筆資料、同步寫入資料庫（`save`）、觸發 `mail_booking(mode="cancel")` 發送取消信，最後執行 `st.rerun()` 重新整理畫面。
-- **變更會議**：在更新前先使用 `.copy()` 完整保留 `old_b` 資料，更新 `b` 欄位並儲存後，將新舊資料傳入 `mail_booking(b, old_b=old_b, mode="update")`，自動判斷並發送對應的更動通知信。
+可管理會議來源：
 
-## 4. 當前完美的實作程式碼 (Current Stable Code)
+- 一般使用者：只能管理自己發起的會議。
+- SuperAdmin：可管理所有會議。
+
+過濾邏輯由 `visible_bookings(data, st.session_state.uid)` 決定。
+
+## 2. 會議狀態顯示
+
+每筆會議以 `st.expander` 顯示，標題依照目前時間加上狀態前綴：
+
+- `已結束:`：目前時間晚於會議結束時間。
+- `進行中:`：目前時間介於會議開始與結束之間。
+- `管理:`：尚未開始的會議。
+
+展開後需顯示：
+
+- 發起人。
+- 與會人員。
+- 修改會議室。
+- 修改日期。
+- 時間軸與開始/結束時間下拉選單。
+
+## 3. 已結束會議
+
+若會議已結束：
+
+- 顯示 `此會議已結束，無法再修改時程。`
+- 不顯示修改會議室、日期與時間軸。
+- 可顯示 `刪除此歷史會議` 按鈕，刪除後只移除資料並重新整理。
+
+## 4. 修改會議規則
+
+尚未結束的會議可以修改會議室、日期、開始時間與結束時間。
+
+時間軸必須以原會議資料呼叫：
+
 ```python
-    st.subheader("我的可管理預約")
-data=db()
-for b in [x for x in data["bookings"] if x["org"]==st.session_state.uid]:
-    with st.expander(f"{b['id']}｜{b['title']}｜{b['date']} {b['start']}-{b['end']} ({b['room']})"):
-        nr=st.selectbox("新會議室",["A會議室","B會議室","C會議室"],["A會議室","B會議室","C會議室"].index(b["room"]),key="r"+b["id"])
-        nd=str(st.date_input("新日期",dtime(b["date"],b["start"]).date(),key="d"+b["id"]))
-        ns,ne=time_grid(nr,nd,def_s=b["start"],def_e=b["end"])
-        st.caption(f"新時段：{ns or '--:--'} ~ {ne or '--:--'}")
-        if st.button("變更會議",key="u"+b["id"]):
-            if not ns or not ne: st.error("變更失敗：新選擇的時段或會議室無法預約。")
-            elif (dtime(b["date"],b["start"])-dt.datetime.now()).total_seconds()<3600: st.error("操作失敗：會議變更必須在會議開始 1 小時前進行。")
-            else:
-                err=valid(nd,ns,ne) or ("變更失敗：新時段與既有預約或前後 30 分鐘緩衝期衝突。" if hit(nr,nd,ns,ne,b["id"]) else "")
-                if err: st.error(err)
-                else:
-                    old_b=b.copy()
-                    b.update({"room":nr,"date":nd,"start":ns,"end":ne})
-                    save(data); mail_booking(b,old_b=old_b,mode="update"); st.success("已變更"); st.rerun()
-        if st.button("取消會議",key="c"+b["id"]):
-            if (dtime(b["date"],b["start"])-dt.datetime.now()).total_seconds()<3600: st.error("操作失敗：會議取消必須在會議開始 1 小時前進行。")
-            else: data["bookings"]=[x for x in data["bookings"] if x["id"]!=b["id"]]; save(data); mail_booking(b,mode="cancel"); st.success("已取消"); st.rerun()
+ns, ne = time_grid(
+    nr,
+    nd,
+    def_s=b["start"],
+    def_e=b["end"],
+    exclude_booking_id=b["id"],
+    widget_key=f"edit_{b['id']}",
+)
 ```
 
-## 5. 變更紀錄 (Change Log)
-- **2026/06/21**：
-  - 定稿管理面板規格，完整歸檔「1小時前控管」與「新舊資料對比外發通知」之防呆商務邏輯。
+此呼叫有三個必要目的：
+
+- 開始時間與結束時間下拉選單自動帶入該會議原本的預訂時間。
+- 該會議原本的預訂時段只在自己的變更介面中視為可預約，方便發起人只微調時間。
+- 多筆會議同時展開時，避免 Streamlit widget key 衝突。
+
+## 5. 儲存時間變更
+
+`儲存時間變更` 按鈕需放在左右兩欄的左欄，並使用 `use_container_width=True`。
+
+點擊後驗證順序如下：
+
+1. 若 `ns` 或 `ne` 為空，顯示 `變更失敗：無法預約。`
+2. 執行 `valid(nd, ns, ne)`。
+3. 執行 `hit(nr, nd, ns, ne, skip=b["id"])`，排除目前會議本身。
+4. 若驗證通過，先以 `old_b = b.copy()` 保留舊資料。
+5. 更新 `room`、`date`、`start`、`end`。
+6. 執行 `save(data)`。
+7. 執行 `mail_booking(b, old_b=old_b, mode="update")`。
+8. 顯示 `已變更時程` 並 `st.rerun()`。
+
+## 6. 撤銷會議
+
+`撤銷此場會議` 按鈕需放在左右兩欄的右欄，並使用 `use_container_width=True`。
+
+點擊後：
+
+1. 從 `data["bookings"]` 移除該筆會議。
+2. 執行 `save(data)`。
+3. 執行 `mail_booking(b, mode="cancel")`。
+4. 顯示 `已成功撤銷會議` 並 `st.rerun()`。
+
+## 7. 不影響範圍
+
+- 行程變更介面的 `exclude_booking_id` 只排除目前正在修改的該筆會議。
+- 不影響一般會議排程申請介面的時間軸與會議室衝突判斷。
+- 不影響其他會議對該會議室的 30 分鐘緩衝限制。
+- 不套用個人行程重疊二段式確認；個人行程重疊確認只屬於「會議排程申請」送出流程。
+
+## 8. 變更紀錄
+
+- 2026/06/21：
+  - 定稿管理面板規格，歸檔基礎權限與變更/取消流程。
+- 2026/06/25：
+  - 行程變更介面改為使用 `visible_bookings()`。
+  - 已結束會議改為不可修改，只保留歷史刪除。
+  - 修改時間軸時傳入 `exclude_booking_id`，讓原會議時段可被該會議本身選取。
+  - 修改時間軸時傳入 `widget_key`，避免多筆會議元件 key 衝突。
+  - 儲存變更前加入 `valid()` 與 `hit(..., skip=b["id"])` 雙重驗證。
