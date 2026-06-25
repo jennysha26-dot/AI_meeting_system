@@ -150,6 +150,19 @@
         "D123456789",
         "E123456789"
       ]
+    },
+    {
+      "id": "BK1782370992",
+      "title": "核心系統專案討論會",
+      "room": "C會議室",
+      "date": "2026-06-30",
+      "start": "10:00",
+      "end": "12:30",
+      "org": "C123456789",
+      "org_name": "思妤",
+      "people": [
+        "C123456789"
+      ]
     }
   ],
   "reports": [
@@ -187,17 +200,17 @@
   },
   "account_requests": [],
   "login_sessions": {
-    "WcgQtRPUsU3RPppumXotXM_LtRs6-3qbz9RgWGZ3dZk": {
-      "uid": "C123456789",
-      "expires": 1782370426.4553556
-    },
-    "-xrAMZ9aY7qyYCPucpcMnz57TRtVHcYsB3LF9T02-ZI": {
-      "uid": "A123456789",
-      "expires": 1782370962.8830469
-    },
     "Msi4o6fWo64Yys9y-sfjwAu6xqnu_TJuDZ3B5N5AWLI": {
       "uid": "C123456789",
       "expires": 1782371929.037675
+    },
+    "NWctj3yAN_tv6MYy9O7CB5rshA0wcLbOGPenUDg2gi0": {
+      "uid": "C123456789",
+      "expires": 1782381159.4712052
+    },
+    "clYe1e6IiKPFKwbn9nVG8BTBTrI9a08ndc8rjTOACeU": {
+      "uid": "B123456789",
+      "expires": 1782457967.714697
     }
   }
 }

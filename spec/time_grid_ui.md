@@ -1,105 +1,199 @@
-# Component Spec: 會議室預訂狀態時間軸 (Time Grid UI)
+# Component Spec: 會議室預訂狀態時間軸
 
-## 1. 功能概述 (Overview)
-- 在 Streamlit 預約介面上渲染當日 09:00 至 21:00 的會議室預訂狀態時間軸。
-- 提供開始時間與結束時間的並排下拉選單（`st.selectbox`），並根據當前時間與既有預約自動過濾可用時段。
+## 1. 功能概述
 
-## 2. 商業邏輯與限制 (Business Rules)
-- **1小時前限制**：使用者無法預約當前時間加 1 小時內（含過去）的時段。
-- **30分鐘緩衝期**：每個成功預約（Booking）的前後各自動加上 30 分鐘的清理與準備時間，這段時間同樣列入「不可預訂」範圍。
-- **結束時間過濾**：當使用者選定「開始時間」後，結束時間選單必須至少大於開始時間 30 分鐘，且一旦中間遇到任何不可預訂時段，後續時段皆不予顯示。
+`time_grid()` 負責在 Streamlit 預約與行程變更介面中顯示指定會議室、指定日期的可預約狀態。
 
-## 3. UI 畫面樣式與顏色規範 (UI Specs)
-時間軸由 72 格（每格 10 分鐘）的水平區塊緊密組成，顏色必須嚴格對齊以下圖例：
-- 🟩 **已選擇 (Green)**：當前下拉選單中，自「開始時間」至「結束時間」所涵蓋的區間。
-  - CSS 樣式：`background-color: #4ade80;`
-- ⬜ **可預訂 (White)**：目前尚未被佔用、且符合 1 小時前限制的開放預約時段。
-  - CSS 樣式：`background-color: #ffffff;`
-- ▒ **不可預訂 (Gray with stripes)**：已被他人預約之時段、既有預約前後的 30 分鐘緩衝期，以及已過去的歷史時間。
-  - CSS 樣式：`background-color: #e2e8f0; background-image: linear-gradient(45deg, #cbd5e1 25%, transparent 25%, transparent 50%, #cbd5e1 50%, #cbd5e1 75%, transparent 75%, transparent); background-size: 8px 8px;`
+元件包含：
 
-## 4. 當前完美的實作程式碼 (Current Stable Code)
+- 開始時間下拉選單。
+- 結束時間下拉選單。
+- 09:00 至 21:00 的水平時間軸。
+- 已選擇 / 不可預訂 / 可預訂圖例。
+
+時間軸不顯示標題。
+
+## 2. 時間粒度
+
+- 營業時間固定為 09:00 至 21:00。
+- 時間選項以 10 分鐘為單位。
+- 時間軸共 72 格，每格代表 10 分鐘。
+- `ts()` 必須回傳：
+
 ```python
-def time_grid(room, d, def_s=None, def_e=None):
-    times = ts()
-    bookings = [x for x in db()["bookings"] if x["room"] == room and x["date"] == d and not (def_s and x["start"] == def_s and x["end"] == def_e)]
-    limit_t = dt.datetime.now() + dt.timedelta(hours=1)
-    
-    def is_slot_busy(s):
-        t = dtime(d, s)
-        if t <= limit_t: return True
-        return any(dtime(d, b["start"]) - dt.timedelta(minutes=30) <= t < dtime(d, b["end"]) + dt.timedelta(minutes=30) for b in bookings)
-
-    valid_starts = [s for s in times[:-1] if dtime(d, s) > limit_t]
-    if not valid_starts:
-        st.error("當日已無可預約時段"); return ("", "")
-
-    c_s, c_e = st.columns(2)
-    with c_s:
-        start = st.selectbox("開始時間", valid_starts, index=valid_starts.index(def_s) if def_s in valid_starts else 0, key=f"sel_s_{room}_{d}_{def_s}")
-    
-    with c_e:
-        valid_ends = []
-        start_idx = times.index(start)
-        for e in times[start_idx+3:]:
-            if any(is_slot_busy(times[step]) for step in range(start_idx, times.index(e))): break
-            valid_ends.append(e)
-        end = st.selectbox("結束時間", valid_ends if valid_ends else ["該時段無法預約"], disabled=not valid_ends, key=f"sel_e_{room}_{d}_{def_s}")
-        if not valid_ends: end = "該時段無法預約"
-
-    st.markdown("<p style='font-size:14px; font-weight:bold; margin-top:15px; margin-bottom:5px;'>會議室當日預訂狀態時間軸</p>", unsafe_allow_html=True)
-    st.markdown("""
-        <style>
-        div[data-testid='stHorizontalBlock'] > div { min-width: 0px !important; padding: 0px !important; }
-        .timeline-container { display: flex; width: 100%; border: 1px solid #cbd5e1; height: 35px; border-radius: 6px; overflow: hidden; background-color: #ffffff; margin-bottom: 25px; }
-        .timeline-label-item { position: absolute; transform: translateX(-50%); font-size: 11px; font-weight: 600; color: #475569; white-space: nowrap; top: 39px; }
-        </style>
-    """, unsafe_allow_html=True)
-
-    active_labels = { "09:00": 0.0, "21:00": 100.0 }
-    t_base = dt.datetime.strptime(f"{d} 09:00", "%Y-%m-%d %H:%M")
-    get_pos = lambda ts_str: ((dt.datetime.strptime(f"{d} {ts_str}", "%Y-%m-%d %H:%M") - t_base).total_seconds() / 43200) * 100    
-    
-    if end != "該時段無法預約" and start and end:
-        active_labels[start], active_labels[end] = get_pos(start), get_pos(end)
-
-    for b in bookings:
-        bs_dt, be_dt = dtime(d, b["start"]) - dt.timedelta(minutes=30), dtime(d, b["end"]) + dt.timedelta(minutes=30)
-        bs = bs_dt.strftime("%H:%M") if bs_dt >= t_base else "09:00"
-        be = be_dt.strftime("%H:%M") if be_dt <= dtime(d, "21:00") else "21:00"
-        active_labels[bs], active_labels[be] = get_pos(bs), get_pos(be)
-
-    if t_base <= limit_t <= dtime(d, "21:00"):
-        lim_str = limit_t.strftime("%H:%M")[:-1] + "0"
-        active_labels[lim_str] = get_pos(lim_str)
-
-    bar_html = "<div style='position: relative; width: 100%;'><div class='timeline-container'>"
-    for s in times[:-1]:
-        is_selected = (end != "該時段無法預約" and start and end and dtime(d, start) <= dtime(d, s) < dtime(d, end))
-        bg_style = "background-color: #4ade80;" if is_selected else ("background-color: #e2e8f0; background-image: linear-gradient(45deg, #cbd5e1 25%, transparent 25%, transparent 50%, #cbd5e1 50%, #cbd5e1 75%, transparent 75%, transparent); background-size: 8px 8px;" if is_slot_busy(s) else "background-color: #ffffff;")
-        bar_html += f"<div style='width: calc(100% / 72); flex-shrink: 0; {bg_style}' title='{s}'></div>"
-    bar_html += "</div>"
-
-    filtered_labels = []
-    for s, pos in sorted(active_labels.items(), key=lambda x: x[1]):
-        if any(abs(pos - fp) < 3.5 for _, fp in filtered_labels) and s not in ["09:00", "21:00", start, end]: continue
-        filtered_labels.append((s, pos))
-        bar_html += f"<div class='timeline-label-item' style='left: {pos}%;'>{s}</div>"
-    bar_html += "</div></div><br>"
-
-    st.markdown(bar_html, unsafe_allow_html=True)
-    st.markdown("""
-        <div style='display: flex; gap: 20px; font-size: 12px; margin-top: 5px; justify-content: center;'>
-            <div style='display: flex; align-items: center; gap: 6px;'><div style='width: 14px; height: 14px; background: #4ade80; border-radius: 3px;'></div>已選擇</div>
-            <div style='display: flex; align-items: center; gap: 6px;'><div style='width: 14px; height: 14px; background: #cbd5e1; border-radius: 3px; background-image: linear-gradient(45deg, #94a3b8 25%, transparent 25%, transparent 50%, #94a3b8 50%, #94a3b8 75%, transparent 75%, transparent); background-size: 4px 4px;'></div>不可預訂</div>
-            <div style='display: flex; align-items: center; gap: 6px;'><div style='width: 14px; height: 14px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 3px;'></div>可預訂</div>
-        </div><br>
-    """, unsafe_allow_html=True)  
-    return (start, end) if end != "該時段無法預約" else (start, "")
+[f"{h:02d}:{m:02d}" for h in range(9, 21) for m in range(0, 60, 10)] + ["21:00"]
 ```
 
-## 5. 變更紀錄 (Change Log)
-- **2026/06/21**：
-  - 修正了因為程式碼精簡化導致可預訂區間大面積發灰、圖層疊加錯置的問題。
-  - 將時間軸改回穩定度最高的單格 `div` 彈性佈局，並將每格寬度固定設為 `calc(100% / 72)`。
-  - 成功修復 ▒ 不可預訂灰色斜線條紋在特定日期（如 6/24、6/25）會產生左右偏移的 Bug，確保條紋邊界與下方時間軸標籤精確對齊。
+## 3. 可預約規則
+
+- 使用者必須在會議開始 1 小時前預約。
+- `limit_t = dt.datetime.now() + dt.timedelta(hours=1)`。
+- `dtime(d, s) <= limit_t` 的格子視為不可預訂。
+- 既有預約的前 30 分鐘與後 30 分鐘皆視為不可預訂。
+- 結束時間至少必須晚於開始時間 30 分鐘，因此從 `times[start_idx+3:]` 開始列出。
+- 結束時間選項遇到第一個不可預訂格後即停止，後續時間不再顯示。
+
+## 4. 函式介面
+
+```python
+def time_grid(room, d, def_s=None, def_e=None, exclude_booking_id="", widget_key=""):
+```
+
+參數說明：
+
+- `room`：會議室名稱。
+- `d`：日期字串，格式為 `YYYY-MM-DD`。
+- `def_s`：預設開始時間，主要用於行程變更介面。
+- `def_e`：預設結束時間，主要用於行程變更介面。
+- `exclude_booking_id`：排除指定 booking，讓行程變更時原會議本身不阻擋自己的時段。
+- `widget_key`：自訂 Streamlit widget key 前綴，避免行程變更介面多筆會議的 selectbox key 衝突。
+
+## 5. 下拉選單規格
+
+開始與結束時間需使用左右兩欄：
+
+```python
+c_s, c_e = st.columns(2)
+```
+
+開始時間：
+
+- 選項來自 `valid_starts`。
+- 若 `def_s` 存在且仍在 `valid_starts` 中，預設選中 `def_s`。
+- 有 `widget_key` 時，key 格式為：
+
+```python
+f"{widget_key}_start_{room}_{d}"
+```
+
+結束時間：
+
+- 選項來自 `valid_ends`。
+- 若 `def_e` 存在且仍在 `valid_ends` 中，預設選中 `def_e`。
+- 沒有可用結束時間時，顯示 `該時段無法預約` 並禁用 selectbox。
+- 有 `widget_key` 時，key 格式為：
+
+```python
+f"{widget_key}_end_{room}_{d}"
+```
+
+## 6. 時間軸顏色
+
+每格時間軸必須依照下列優先順序決定顏色：
+
+1. 已選擇區間：綠色。
+2. 不可預訂區間：灰色斜線。
+3. 可預訂區間：白色。
+
+樣式：
+
+```css
+/* 已選擇 */
+background-color: #4ade80;
+
+/* 可預訂 */
+background-color: #ffffff;
+
+/* 不可預訂 */
+background-color: #e2e8f0;
+background-image: linear-gradient(45deg, #cbd5e1 25%, transparent 25%, transparent 50%, #cbd5e1 50%, #cbd5e1 75%, transparent 75%, transparent);
+background-size: 8px 8px;
+```
+
+時間軸容器：
+
+```css
+.timeline-container {
+    display: flex;
+    width: 100%;
+    border: 1px solid #cbd5e1;
+    height: 35px;
+    border-radius: 6px;
+    overflow: hidden;
+    background-color: #ffffff;
+    margin-bottom: 25px;
+}
+```
+
+每格寬度固定：
+
+```python
+width: calc(100% / 72);
+```
+
+## 7. 下方時間標籤規則
+
+必須顯示：
+
+- `09:00`
+- `21:00`
+- 目前已選擇區間的開始時間與結束時間。
+- 不可預訂區間的起始與結束時間。
+
+不可預訂區間需先合併後再顯示邊界：
+
+1. 先建立目前時間限制區間：`09:00` 至 `limit_boundary`。
+2. `limit_boundary` 需將 `limit_t` 無條件進位到下一個 10 分鐘刻度，並且不超過 `21:00`。
+3. 加入所有既有預約的 30 分鐘緩衝區間。
+4. 將重疊或相接的不可預訂區間合併。
+5. 顯示合併後每個區間的起點與終點。
+
+範例：
+
+- 當前時間 17:00，則 `09:00-18:00` 不可預訂，標籤只需顯示 `09:00`、`18:00`、`21:00`。
+- 當前時間 14:00，若既有緩衝區間與目前時間限制合併為 `09:00-17:00`，標籤只需顯示 `09:00`、`17:00`、`21:00`。
+- 當前時間 10:00，若另有既有緩衝區間 `12:30-17:00`，標籤需顯示 `09:00`、`11:00`、`12:30`、`17:00`、`21:00`。
+
+標籤不得因距離過近而被過濾掉；已選擇區間的開始與結束時間必須保留。
+
+標籤字體大小：
+
+```css
+font-size: 12px;
+```
+
+## 8. 圖例
+
+時間軸下方需顯示三個圖例：
+
+- 已選擇：綠色方塊。
+- 不可預訂：灰色斜線方塊。
+- 可預訂：白色方塊。
+
+圖例文字大小為 12px，置中排列。
+
+## 9. 行程變更介面使用規則
+
+行程變更與異動管理介面呼叫 `time_grid()` 時，必須傳入原會議資料：
+
+```python
+ns, ne = time_grid(
+    nr,
+    nd,
+    def_s=b["start"],
+    def_e=b["end"],
+    exclude_booking_id=b["id"],
+    widget_key=f"edit_{b['id']}",
+)
+```
+
+目的：
+
+- 讓原本會議的時段在該會議的變更介面中視為可預約。
+- 讓開始/結束時間下拉選單預設為該會議原本的時間。
+- 避免多筆會議同時展開時發生 widget key 衝突。
+
+此規則只限於行程變更與異動管理，不影響一般會議排程申請介面。
+
+## 10. 變更紀錄
+
+- 2026/06/21：
+  - 改為 72 格單格 `div` 彈性佈局。
+  - 每格寬度固定為 `calc(100% / 72)`。
+- 2026/06/25：
+  - 時間粒度定稿為 10 分鐘。
+  - 移除時間軸標題。
+  - 標籤字體調整為 12px。
+  - 不可預訂標籤改為先合併區間後顯示邊界。
+  - 已選擇區間開始/結束標籤不得被隱藏。
+  - 行程變更介面新增 `exclude_booking_id` 與 `widget_key` 使用規則。

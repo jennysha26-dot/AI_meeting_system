@@ -452,7 +452,7 @@ def user_hit(uid, d, s, e):
 
     a, b = dtime(d, s), dtime(d, e)
 
-    return next((x["id"] for x in db()["bookings"] if uid in x["people"] and x["date"] == d and a < dtime(d, x["end"]) and b > dtime(d, x["start"])), "")
+    return next((x for x in db()["bookings"] if uid in x.get("people", []) and x["date"] == d and a < dtime(d, x["end"]) and b > dtime(d, x["start"])), None)
 
 
 def time_grid(room, d, def_s=None, def_e=None, exclude_booking_id="", widget_key=""):
@@ -1100,7 +1100,17 @@ with t1:
 
     
 
-    if st.button("送出預約申請", type="primary"):
+    submit_col, _ = st.columns(2)
+
+    with submit_col:
+
+        submit_booking = st.button("送出預約申請", type="primary", use_container_width=True)
+
+    if submit_booking:
+
+        st.session_state.pop("booking_cancelled_notice", None)
+
+        st.session_state.pop("booking_success_notice", None)
 
         if not start or not end: st.error("預約失敗：當前選擇的時段無法預約。")
 
@@ -1114,11 +1124,67 @@ with t1:
 
             else:
 
-                data = db()
-
                 b = {"id": f"BK{int(time.time())}", "title": title, "room": room, "date": date, "start": start, "end": end, "org": actor_uid, "org_name": actor["name"], "people": people}
 
-                data["bookings"].append(b); save(data); mail_booking(b); st.success(f"預約成功：{b['id']}")
+                conflict = user_hit(st.session_state.uid, date, start, end)
+
+                if conflict:
+
+                    st.session_state.pending_booking = b
+
+                    st.session_state.pending_booking_conflict = conflict
+
+                else:
+
+                    data = db()
+
+                    data["bookings"].append(b); save(data); mail_booking(b); st.success(f"預約成功：{b['id']}")
+
+    pending = st.session_state.get("pending_booking")
+
+    conflict = st.session_state.get("pending_booking_conflict")
+
+    if st.session_state.get("booking_success_notice"):
+
+        st.success(f"預約成功：{st.session_state.booking_success_notice}")
+
+    elif st.session_state.get("booking_cancelled_notice"):
+
+        st.info("已取消此次預約。")
+
+    elif pending and conflict:
+
+        st.warning(f"提醒：您在 {conflict['date']} {conflict['start']}-{conflict['end']} 已有「{conflict['title']}」會議，地點為 {conflict['room']}。目前選擇的時段會與該會議重疊，是否仍要繼續預約？")
+
+        c_confirm, c_cancel = st.columns(2)
+
+        with c_confirm:
+
+            if st.button("確認繼續預約", type="primary", use_container_width=True):
+
+                data = db()
+
+                data["bookings"].append(pending); save(data); mail_booking(pending)
+
+                st.session_state.pop("pending_booking", None)
+
+                st.session_state.pop("pending_booking_conflict", None)
+
+                st.session_state.booking_success_notice = pending["id"]
+
+                st.rerun()
+
+        with c_cancel:
+
+            if st.button("取消此次預約", use_container_width=True):
+
+                st.session_state.pop("pending_booking", None)
+
+                st.session_state.pop("pending_booking_conflict", None)
+
+                st.session_state.booking_cancelled_notice = True
+
+                st.rerun()
 
     
 
