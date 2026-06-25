@@ -1190,77 +1190,77 @@ with t1:
 
     st.subheader("行程變更與異動管理")
 
-data = db()
+    data = db()
 
-sorted_bookings = sorted(visible_bookings(data, st.session_state.uid), key=lambda x: (x.get("date", ""), x.get("start", "")))
+    sorted_bookings = sorted(visible_bookings(data, st.session_state.uid), key=lambda x: (x.get("date", ""), x.get("start", "")))
 
-for b in sorted_bookings:
+    for b in sorted_bookings:
 
-    now = dt.datetime.now()
-    start_dt = dtime(b["date"], b["start"])
-    end_dt = dtime(b["date"], b["end"])
-    
-    if now > end_dt:
-        prefix = "已結束:"
-    elif start_dt <= now <= end_dt:
-        prefix = "進行中:"
-    else:
-        prefix = "管理:"
-
-    with st.expander(f"{prefix} {b['id']} ｜ {b['title']} ｜ {b['date']} {b['start']}-{b['end']}"):
-
-        st.markdown(f"**發起人**：{employee_label(b.get('org', ''))}")
-
-        st.markdown(f"**與會人員**：{attendee_names(b.get('people', []))}")
-
-        if end_dt <= now:
-
-            st.info("此會議已結束，無法再修改時程。")
-
-            if st.button("刪除此歷史會議", key="c"+b["id"], use_container_width=True):
-
-                data["bookings"] = [x for x in data["bookings"] if x["id"] != b["id"]]; save(data); st.success("已刪除歷史會議"); st.rerun()
-
-            continue
-
-        nr = st.selectbox("修改會議室", ["A會議室", "B會議室", "C會議室"], ["A會議室", "B會議室", "C會議室"].index(b["room"]), key="r"+b["id"])
-
-        nd = str(st.date_input("修改日期", start_dt.date(), key="d"+b["id"]))
-
-        ns, ne = time_grid(
-            nr,
-            nd,
-            def_s=b["start"],
-            def_e=b["end"],
-            exclude_booking_id=b["id"],
-            widget_key=f"edit_{b['id']}",
-        )
+        now = dt.datetime.now()
+        start_dt = dtime(b["date"], b["start"])
+        end_dt = dtime(b["date"], b["end"])
         
-        c_up, c_del = st.columns(2)
+        if now > end_dt:
+            prefix = "已結束:"
+        elif start_dt <= now <= end_dt:
+            prefix = "進行中:"
+        else:
+            prefix = "管理:"
 
-        with c_up:
+        with st.expander(f"{prefix} {b['id']} ｜ {b['title']} ｜ {b['date']} {b['start']}-{b['end']}"):
 
-            if st.button("儲存時間變更", key="u"+b["id"], use_container_width=True):
+            st.markdown(f"**發起人**：{employee_label(b.get('org', ''))}")
 
-                if not ns or not ne: st.error("變更失敗：無法預約。")
+            st.markdown(f"**與會人員**：{attendee_names(b.get('people', []))}")
 
-                elif err := valid(nd, ns, ne) or ("變更失敗：該時段與既有預約或緩衝期衝突。" if hit(nr, nd, ns, ne, skip=b["id"]) else ""):
+            if end_dt <= now:
 
-                    st.error(err)
+                st.info("此會議已結束，無法再修改時程。")
 
-                else:
+                if st.button("刪除此歷史會議", key="c"+b["id"], use_container_width=True):
 
-                    old_b = b.copy()
+                    data["bookings"] = [x for x in data["bookings"] if x["id"] != b["id"]]; save(data); st.success("已刪除歷史會議"); st.rerun()
 
-                    b.update({"room": nr, "date": nd, "start": ns, "end": ne})
+                continue
 
-                    save(data); mail_booking(b, old_b=old_b, mode="update"); st.success("已變更時程"); st.rerun()
+            nr = st.selectbox("修改會議室", ["A會議室", "B會議室", "C會議室"], ["A會議室", "B會議室", "C會議室"].index(b["room"]), key="r"+b["id"])
 
-        with c_del:
+            nd = str(st.date_input("修改日期", start_dt.date(), key="d"+b["id"]))
 
-            if st.button("撤銷此場會議", key="c"+b["id"], use_container_width=True):
+            ns, ne = time_grid(
+                nr,
+                nd,
+                def_s=b["start"],
+                def_e=b["end"],
+                exclude_booking_id=b["id"],
+                widget_key=f"edit_{b['id']}",
+            )
+            
+            c_up, c_del = st.columns(2)
 
-                data["bookings"] = [x for x in data["bookings"] if x["id"] != b["id"]]; save(data); mail_booking(b, mode="cancel"); st.success("已成功撤銷會議"); st.rerun()
+            with c_up:
+
+                if st.button("儲存時間變更", key="u"+b["id"], use_container_width=True):
+
+                    if not ns or not ne: st.error("變更失敗：無法預約。")
+
+                    elif err := valid(nd, ns, ne) or ("變更失敗：該時段與既有預約或緩衝期衝突。" if hit(nr, nd, ns, ne, skip=b["id"]) else ""):
+
+                        st.error(err)
+
+                    else:
+
+                        old_b = b.copy()
+
+                        b.update({"room": nr, "date": nd, "start": ns, "end": ne})
+
+                        save(data); mail_booking(b, old_b=old_b, mode="update"); st.success("已變更時程"); st.rerun()
+
+            with c_del:
+
+                if st.button("撤銷此場會議", key="c"+b["id"], use_container_width=True):
+
+                    data["bookings"] = [x for x in data["bookings"] if x["id"] != b["id"]]; save(data); mail_booking(b, mode="cancel"); st.success("已成功撤銷會議"); st.rerun()
 
 with t2:
 
